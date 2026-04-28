@@ -1,0 +1,217 @@
+{
+  "name": "Content Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "interval": 6,
+        "unit": "hours"
+      },
+      "id": "scheduleTrigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "resource": "designs",
+        "operation": "getAll",
+        "folderId": "",
+        "limit": 10,
+        "filters": {
+          "type": "IMAGE"
+        }
+      },
+      "id": "getCanvaDesigns",
+      "name": "Get Canva Designs",
+      "type": "n8n-nodes-base.canva",
+      "position": [450, 300],
+      "credentials": {
+        "canvaOAuth2": {
+          "id": "YOUR_CANVA_CRED_ID",
+          "name": "Canva Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const publishedIds = ['design_id_example'];\nconst designId = $input.all()[0].json.id;\n\nif (publishedIds.includes(designId)) {\n  return [];\n}\n\nreturn [{ json: $input.all()[0].json }];"
+      },
+      "id": "filterPublished",
+      "name": "Filter Already Published",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "text": "={{ $json.name + '\\n' + 'Design description: ' + ($json.description || 'No description') }}",
+        "options": {
+          "systemMessage": "You are a social media manager. Write an engaging caption for the following design content. Keep it under 280 characters for Twitter, include relevant hashtags. Return only the caption text."
+        }
+      },
+      "id": "generateCaption",
+      "name": "Generate Caption with ChatGPT",
+      "type": "n8n-nodes-base.openAi",
+      "position": [850, 300],
+      "credentials": {
+        "openAi": {
+          "id": "YOUR_OPENAI_CRED_ID",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "createTweet",
+        "text": "={{ $input.all()[1].json.output.text }}",
+        "mediaIds": "={{ [$input.all()[0].json.image_url] }}"
+      },
+      "id": "postToTwitter",
+      "name": "Post to Twitter",
+      "type": "n8n-nodes-base.twitter",
+      "position": [1050, 250],
+      "credentials": {
+        "twitterOAuth1Api": {
+          "id": "YOUR_TWITTER_CRED_ID",
+          "name": "Twitter Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "share",
+        "text": "={{ $input.all()[1].json.output.text }}",
+        "imageUrl": "={{ $input.all()[0].json.image_url }}",
+        "distribution": "EXTERNAL"
+      },
+      "id": "postToLinkedIn",
+      "name": "Post to LinkedIn",
+      "type": "n8n-nodes-base.linkedin",
+      "position": [1050, 350],
+      "credentials": {
+        "linkedInOAuth2Api": {
+          "id": "YOUR_LINKEDIN_CRED_ID",
+          "name": "LinkedIn Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetName": "Posts",
+        "columns": "={{ {designId: $input.all()[0].json.id, platform: 'twitter', postUrl: $input.all()[2].json.data.id, timestamp: new Date().toISOString()} }}",
+        "cell": "A2"
+      },
+      "id": "logToSheet",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [1250, 300],
+      "credentials": {
+        "googleSheetsOAuth2": {
+          "id": "YOUR_GOOGLE_SHEETS_CRED_ID",
+          "name": "Google Sheets"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "responseCode": 200,
+        "responseBody": "={{ {status: 'success', message: 'Posted to Twitter and LinkedIn'} }}"
+      },
+      "id": "respond",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1450, 300],
+      "webhookId": "scheduleTrigger"
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Canva Designs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Canva Designs": {
+      "main": [
+        [
+          {
+            "node": "Filter Already Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Already Published": {
+      "main": [
+        [
+          {
+            "node": "Generate Caption with ChatGPT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Caption with ChatGPT": {
+      "main": [
+        [
+          {
+            "node": "Post to Twitter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post to LinkedIn",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to Twitter": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post to LinkedIn": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Log to Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
